@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radial 1.0 Dashboard</title>
+    <!-- Φόρτωση Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Φόρτωση React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Φόρτωση PropTypes (Απαραίτητο για τη σωστή λειτουργία του Recharts στον Browser) -->
+    <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    
+    <!-- Φόρτωση Recharts (Καρφιτσωμένο σε σταθερή UMD έκδοση 2.1.9 για αποφυγή σφαλμάτων) -->
+    <script crossorigin src="https://unpkg.com/recharts@2.1.9/umd/Recharts.js"></script>
+    
+    <!-- Φόρτωση Babel (για μεταγλώττιση JSX στον browser) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-50">
+    <!-- Εδώ θα "κουμπώσει" η React εφαρμογή -->
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Destructuring από τις βιβλιοθήκες που φορτώσαμε
+        const { useState, useMemo, useEffect } = React;
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceDot } = Recharts;
+
+        // --- ΙΚΟΝΙΔΙΑ SVG ---
+        const Settings = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        );
+
+        const Info = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        );
+
+        const Clock = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        );
+
+        // --- COMPONENTS ΓΙΑ SVG ANIMATION ΒΕΛΩΝ ---
+        const AnimatedFlowArrow = ({ startX, startY, endX, endY, dur = "2s", delay = "0s" }) => {
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const tinyX = startX + (dx / len) * 0.1;
+          const tinyY = startY + (dy / len) * 0.1;
+
+          return (
+            <line x1={startX} y1={startY} x2={tinyX} y2={tinyY} stroke="#2563eb" strokeWidth="2.5" markerEnd="url(#blue-arrow)">
+              <animate attributeName="x2" values={`${tinyX};${endX};${endX}`} keyTimes="0;0.7;1" dur={dur} begin={delay} repeatCount="indefinite" />
+              <animate attributeName="y2" values={`${tinyY};${endY};${endY}`} keyTimes="0;0.7;1" dur={dur} begin={delay} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.7;1" dur={dur} begin={delay} repeatCount="indefinite" />
+            </line>
+          );
+        };
+
+        // --- COMPONENTS ΓΙΑ ΤΑ ΓΡΑΦΙΚΑ (SVG) ---
+        const LayoutPlanDiagram = ({ layoutType }) => {
+          const isSquare = layoutType === 'square';
+          const s = 65; 
+          const cx = 150;
+          const cy = 150;
+          
+          const dx = s * Math.sqrt(3) / 2;
+          const dy = s / 2;
+
+          const getHexagonPoints = (x, y, rh) => {
+            return `${x-rh/2},${y-s/2} ${x+rh/2},${y-s/2} ${x+rh},${y} ${x+rh/2},${y+s/2} ${x-rh/2},${y+s/2} ${x-rh},${y}`;
+          };
+
+          return (
+            <div className="bg-white py-3 px-1 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center justify-center h-full">
+              <svg viewBox="30 30 240 240" className="w-full max-w-[220px] h-auto overflow-visible">
+                <defs>
+                  <marker id="dim-arrow-start" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#475569" />
+                  </marker>
+                  <marker id="dim-arrow-end" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#475569" />
+                  </marker>
+                  <marker id="r-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                     <path d="M 0 1 L 8 5 L 0 9 Z" fill="#1e293b" />
+                  </marker>
+                </defs>
+
+                {isSquare ? (
+                  <g>
+                    {/* Τετραγωνικός Κάναβος */}
+                    {[-1, 0, 1].map(i => 
+                      [-1, 0, 1].map(j => (
+                        <rect key={`sq-${i}-${j}`} x={cx + i*s - s/2} y={cy + j*s - s/2} width={s} height={s} fill="none" stroke="#64748b" strokeWidth="1.2" />
+                      ))
+                    )}
+                    
+                    <circle cx={cx} cy={cy} r={s * 0.564} fill="rgba(241, 245, 249, 0.5)" stroke="#1e293b" strokeWidth="1.5" />
+                    
+                    {[-1, 0, 1].map(i => 
+                      [-1, 0, 1].map(j => (
+                        <circle key={`dot-${i}-${j}`} cx={cx + i*s} cy={cy + j*s} r="4.5" fill="#94a3b8" stroke="#334155" strokeWidth="1.5" />
+                      ))
+                    )}
+
+                    <g stroke="#475569" strokeWidth="1" fill="#475569" fontSize="15" style={{ fontFamily: "'Times New Roman', Times, serif" }} fontStyle="italic" fontWeight="bold">
+                       <line x1={cx - s + 9} y1={cy - s} x2={cx - 9} y2={cy - s} markerStart="url(#dim-arrow-start)" markerEnd="url(#dim-arrow-end)" />
+                       <text x={cx - s/2} y={cy - s - 5} textAnchor="middle" stroke="none">s</text>
+                       
+                       <line x1={cx - s} y1={cy + 9} x2={cx - s} y2={cy + s - 9} markerStart="url(#dim-arrow-start)" markerEnd="url(#dim-arrow-end)" />
+                       <rect x={cx - s - 8} y={cy + s/2 - 10} width="16" height="20" fill="white" stroke="none" />
+                       <text x={cx - s} y={cy + s/2 + 4} textAnchor="middle" stroke="none">s</text>
+
+                       <line x1={cx} y1={cy} x2={cx - (s*0.564 - 2)*Math.cos(Math.PI/4)} y2={cy - (s*0.564 - 2)*Math.sin(Math.PI/4)} markerEnd="url(#r-arrow)" stroke="#1e293b" />
+                       <rect x={cx - s*0.282 - 8} y={cy - s*0.282 - 10} width="16" height="16" fill="white" stroke="none" />
+                       <text x={cx - s*0.282} y={cy - s*0.282 + 4} textAnchor="middle" fill="#1e293b" fontSize="16" fontFamily="'Times New Roman', Times, serif" fontStyle="italic" fontWeight="bold" stroke="none">R</text>
+                    </g>
+                  </g>
+                ) : (
+                  <g>
+                    {/* Τριγωνικός Κάναβος */}
+                    {[
+                      [0,0], [0,-s], [0,s],
+                      [dx,-dy], [dx,dy],
+                      [-dx,-dy], [-dx,dy]
+                    ].map((pos, i) => (
+                      <polygon key={`hex-${i}`} points={getHexagonPoints(cx + pos[0], cy + pos[1], s/Math.sqrt(3))} fill="none" stroke="#64748b" strokeWidth="1.2" />
+                    ))}
+
+                    <circle cx={cx} cy={cy} r={s * 0.525} fill="rgba(241, 245, 249, 0.5)" stroke="#1e293b" strokeWidth="1.5" />
+
+                    {[
+                      [0,0], [0,-s], [0,s],
+                      [dx,-dy], [dx,dy],
+                      [-dx,-dy], [-dx,dy]
+                    ].map((pos, i) => (
+                      <circle key={`tdot-${i}`} cx={cx + pos[0]} cy={cy + pos[1]} r="4.5" fill="#94a3b8" stroke="#334155" strokeWidth="1.5" />
+                    ))}
+
+                    <g stroke="#475569" strokeWidth="1" fill="#475569" fontSize="15" style={{ fontFamily: "'Times New Roman', Times, serif" }} fontStyle="italic" fontWeight="bold">
+                       <line x1={cx - dx + 6} y1={cy - dy - 3.5} x2={cx - 6} y2={cy - s + 3.5} markerStart="url(#dim-arrow-start)" markerEnd="url(#dim-arrow-end)" />
+                       <rect x={cx - dx/2 - 8} y={cy - s*0.75 - 10} width="16" height="16" fill="white" stroke="none" />
+                       <text x={cx - dx/2} y={cy - s*0.75 + 4} textAnchor="middle" stroke="none">s</text>
+
+                       <line x1={cx - dx} y1={cy - dy + 9} x2={cx - dx} y2={cy + dy - 9} markerStart="url(#dim-arrow-start)" markerEnd="url(#dim-arrow-end)" />
+                       <rect x={cx - dx - 8} y={cy - 10} width="16" height="20" fill="white" stroke="none" />
+                       <text x={cx - dx} y={cy + 4} textAnchor="middle" stroke="none">s</text>
+
+                       <line x1={cx + dx} y1={cy - dy + 9} x2={cx + dx} y2={cy + dy - 9} markerStart="url(#dim-arrow-start)" markerEnd="url(#dim-arrow-end)" />
+                       <rect x={cx + dx - 8} y={cy - 10} width="16" height="20" fill="white" stroke="none" />
+                       <text x={cx + dx} y={cy + 4} textAnchor="middle" stroke="none">s</text>
+
+                       <line x1={cx} y1={cy} x2={cx - (s*0.525 - 2)*Math.cos(Math.PI/6)} y2={cy + (s*0.525 - 2)*Math.sin(Math.PI/6)} markerEnd="url(#r-arrow)" stroke="#1e293b" />
+                       <rect x={cx - s*0.262*Math.cos(Math.PI/6) - 8} y={cy + s*0.262*Math.sin(Math.PI/6) - 10} width="16" height="16" fill="white" stroke="none" />
+                       <text x={cx - s*0.262*Math.cos(Math.PI/6)} y={cy + s*0.262*Math.sin(Math.PI/6) + 4} textAnchor="middle" fill="#1e293b" fontSize="16" fontFamily="'Times New Roman', Times, serif" fontStyle="italic" fontWeight="bold" stroke="none">R</text>
+                    </g>
+                  </g>
+                )}
+              </svg>
+              
+              <div className="flex justify-between w-full px-2 mt-4 border-t border-gray-100 pt-3" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+                 <span className="italic font-bold text-[16px] text-slate-900 tracking-wide">{isSquare ? 'Τετραγωνική διάταξη' : 'Τριγωνική διάταξη'}</span>
+                 <span className="italic font-bold text-[16px] text-slate-900 tracking-wide">R = {isSquare ? '0.564s' : '0.525s'}</span>
+              </div>
+            </div>
+          );
+        };
+
+        const CrossSectionDiagram = () => {
+          return (
+            <div className="w-full max-w-lg mx-auto overflow-hidden">
+              <svg viewBox="0 50 600 300" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="blue-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+                  </marker>
+                  <marker id="label-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#374151" />
+                  </marker>
+                  <pattern id="soil" width="20" height="20" patternUnits="userSpaceOnUse">
+                     <circle cx="2" cy="2" r="1" fill="#c49a7a" opacity="0.5"/>
+                     <circle cx="12" cy="12" r="1.5" fill="#c49a7a" opacity="0.5"/>
+                  </pattern>
+                  <pattern id="gravel" width="10" height="10" patternUnits="userSpaceOnUse">
+                     <path d="M 2 2 L 4 5 L 1 6 Z" fill="#6b7280" opacity="0.6"/>
+                     <path d="M 7 1 L 9 3 L 6 4 Z" fill="#4b5563" opacity="0.6"/>
+                  </pattern>
+                  {/* Μοτίβο (gradient) για την αναπαράσταση της πίεσης πόρων */}
+                  <linearGradient id="pressureFade" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#1d4ed8">
+                      <animate attributeName="stop-opacity" values="0.85; 0; 0; 0.85" keyTimes="0; 0.3; 0.9; 1" dur="4s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="25%" stopColor="#2563eb">
+                      <animate attributeName="stop-opacity" values="0.9; 0.4; 0; 0; 0.9" keyTimes="0; 0.3; 0.6; 0.9; 1" dur="4s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="50%" stopColor="#3b82f6">
+                      <animate attributeName="stop-opacity" values="0.95; 0.95; 0; 0; 0.95" keyTimes="0; 0.3; 0.7; 0.9; 1" dur="4s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="75%" stopColor="#2563eb">
+                      <animate attributeName="stop-opacity" values="0.9; 0.4; 0; 0; 0.9" keyTimes="0; 0.3; 0.6; 0.9; 1" dur="4s" repeatCount="indefinite" />
+                    </stop>
+                    <stop offset="100%" stopColor="#1d4ed8">
+                      <animate attributeName="stop-opacity" values="0.85; 0; 0; 0.85" keyTimes="0; 0.3; 0.9; 1" dur="4s" repeatCount="indefinite" />
+                    </stop>
+                  </linearGradient>
+                  <pattern id="pressurePattern" x="40" y="0" width="57.5" height="150" patternUnits="userSpaceOnUse">
+                    <rect x="0" y="0" width="57.5" height="150" fill="url(#pressureFade)" />
+                  </pattern>
+                </defs>
+
+                {/* Τίτλος σε δύο σειρές */}
+                <text x="0" y="65" textAnchor="start" fill="#334155" fontSize="16" fontFamily="sans-serif" fontWeight="bold">
+                  <tspan x="0" dy="0">Μηχανισμός</tspan>
+                  <tspan x="0" dy="22">Ακτινικής Ροής</tspan>
+                </text>
+
+                <rect x="0" y="180" width="600" height="170" fill="#e2b793" />
+                <rect x="0" y="180" width="600" height="170" fill="url(#soil)" />
+                
+                {/* Ενιαίο ορθογώνιο που εφαρμόζει το gradient ανάμεσα σε όλα τα στραγγιστήρια */}
+                <rect x="40" y="180" width="517.5" height="150" fill="url(#pressurePattern)" />
+                
+                {[...Array(10)].map((_, i) => (
+                  <g key={`wick-${i}`}>
+                     <line x1={40 + i * 57.5} y1="180" x2={40 + i * 57.5} y2="330" stroke="#b08d70" strokeWidth="6" />
+                     <line x1={40 + i * 57.5} y1="180" x2={40 + i * 57.5} y2="330" stroke="#ffffff" strokeWidth="2" strokeDasharray="4 4" opacity="0.5"/>
+                  </g>
+                ))}
+
+                {/* Απενεργοποιημένα οριζόντια βέλη ακτινικής ροής */}
+                {false && [...Array(5)].map((_, i) => {
+                  const yPos = 210 + i * 25;
+                  return (
+                    <g key={`flow-radial-${i}`}>
+                      <AnimatedFlowArrow startX={250} startY={yPos} endX={295} endY={yPos} dur="2.5s" />
+                      <AnimatedFlowArrow startX={348} startY={yPos} endX={303} endY={yPos} dur="2.5s" />
+                    </g>
+                  );
+                })}
+
+                {/* Πολλαπλά κατακόρυφα βέλη στα στραγγιστήρια με ψευδοτυχαίο delay και duration */}
+                {[...Array(10)].map((_, i) => {
+                  const x = 40 + i * 57.5;
+                  const dur1 = `${1.5 + (i % 3) * 0.3}s`;
+                  const delay1 = `${(i % 5) * 0.2}s`;
+                  const startY1 = 320 - (i % 3) * 15;
+
+                  return (
+                    <g key={`vert-arrows-${i}`}>
+                      <AnimatedFlowArrow startX={x} startY={startY1} endX={x} endY={190} dur={dur1} delay={delay1} />
+                    </g>
+                  );
+                })}
+
+                <rect x="0" y="165" width="600" height="15" fill="#9ca3af" />
+                <rect x="0" y="165" width="600" height="15" fill="url(#gravel)" />
+
+                <AnimatedFlowArrow startX={290} startY={172.5} endX={100} endY={172.5} dur="3s" />
+                <AnimatedFlowArrow startX={308} startY={172.5} endX={500} endY={172.5} dur="3s" />
+
+                <polygon points="50,165 200,60 400,60 550,165" fill="#d1d5cb" stroke="#787f71" strokeWidth="2" />
+
+                <text x="300" y="125" textAnchor="middle" fill="#374151" fontSize="18" fontFamily="sans-serif" fontWeight="600">Επίχωμα</text>
+                
+                {/* Μετατοπισμένο δεξιά και κάτω */}
+                <line x1="495" y1="95" x2="465" y2="162" stroke="#374151" strokeWidth="2" markerEnd="url(#label-arrow)" />
+                <text x="535" y="70" fill="#374151" fontSize="16" fontFamily="sans-serif" fontWeight="600" textAnchor="middle">
+                  <tspan x="535" dy="0">Στρώση</tspan>
+                  <tspan x="535" dy="20">Αποστράγγισης</tspan>
+                  <tspan x="535" dy="20">(Κουβέρτα)</tspan>
+                </text>
+                
+                <line x1="510" y1="310" x2="452" y2="280" stroke="#374151" strokeWidth="2" markerEnd="url(#label-arrow)" />
+                <text x="515" y="325" fill="#374151" fontSize="16" fontFamily="sans-serif" fontWeight="600" textAnchor="middle">
+                  <tspan x="515" dy="0">Κατακόρυφα</tspan>
+                  <tspan x="515" dy="20">Στραγγιστήρια</tspan>
+                </text>
+              </svg>
+            </div>
+          );
+        };
+
+        // --- HELPER FUNCTIONS ΓΙΑ FDM ---
+        const getHeatmapColor = (value, maxVal) => {
+          if (maxVal === 0) return `rgb(0, 0, 200)`;
+          const ratio = Math.max(0, Math.min(1, value / maxVal));
+          const r = Math.round(100 * ratio);
+          const g = Math.round(220 * ratio);
+          const b = Math.round(200 + 55 * ratio); 
+          return `rgb(${r}, ${g}, ${b})`;
+        };
+
+        const getNiceTicks = (maxVal) => {
+          let step = 10;
+          if (maxVal <= 50) step = 5;
+          else if (maxVal <= 100) step = 10;
+          else if (maxVal <= 250) step = 25;
+          else if (maxVal <= 500) step = 50;
+          else step = 100;
+          
+          const ticks = [];
+          for (let i = 0; i <= maxVal; i += step) ticks.push(i);
+          if (ticks[ticks.length - 1] !== maxVal) ticks.push(maxVal);
+          return ticks;
+        };
+
+        // =========================================================================
+        // ΑΝΑΛΥΤΙΚΗ ΜΕΘΟΔΟΣ (BARRON)
+        // =========================================================================
+        function AnalyticalApp({ onSwitchApp }) {
+          const [layoutType, setLayoutType] = useState('triangular');
+          const [spacing, setSpacing] = useState(1.5);
+          const [cv, setCv] = useState(2.0);
+          const [crCvRatio, setCrCvRatio] = useState(1.5);
+          const [dw, setDw] = useState(0.05);
+          const [xAxisType, setXAxisType] = useState('t'); 
+          const [timeUnit, setTimeUnit] = useState('years'); 
+
+          const calculatedData = useMemo(() => {
+            const R = layoutType === 'square' ? spacing * 0.564 : spacing * 0.525;
+            const De = 2 * R;
+            const safeDw = Math.min(dw, De * 0.9); 
+            const designN = De / safeDw;
+            
+            const calcFn = (nVal) => {
+              const nSq = Math.pow(nVal, 2);
+              return (nSq / (nSq - 1)) * Math.log(nVal) - (3 * nSq - 1) / (4 * nSq);
+            };
+            const designFn = calcFn(designN);
+            const cr = cv * crCvRatio;
+            const timeMultiplier = timeUnit === 'days' ? 365 : timeUnit === 'months' ? 12 : 1;
+            
+            const chartData = [];
+            const standardNs = [5, 10, 20, 40, 80];
+            
+            const urSteps = [];
+            for (let u = 1; u <= 99; u++) {
+              urSteps.push(u);
+            }
+            urSteps.push(99.5, 99.9);
+
+            urSteps.forEach(urPercent => {
+              const urDecimal = urPercent / 100;
+              const currentTr = (-designFn / 8) * Math.log(1 - urDecimal);
+              const currentT = ((currentTr * Math.pow(De, 2)) / cr) * timeMultiplier;
+              
+              const point = {
+                t: parseFloat(currentT.toPrecision(5)),
+                Tr: parseFloat(currentTr.toPrecision(4)),
+                Ur_Design: urPercent 
+              };
+              
+              standardNs.forEach(nVal => {
+                const fnVal = calcFn(nVal);
+                const ur = 1 - Math.exp((-8 * currentTr) / fnVal);
+                point[`Ur_${nVal}`] = parseFloat((Math.max(0, ur) * 100).toFixed(1));
+              });
+              
+              chartData.push(point);
+            });
+
+            return { R, De, n: designN, fn: designFn, cr, chartData, timeMultiplier };
+          }, [layoutType, spacing, cv, crCvRatio, dw, timeUnit]);
+
+          const baseTrTicks = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0];
+          const currentTicks = xAxisType === 'Tr' 
+            ? baseTrTicks 
+            : baseTrTicks.map(tr => ((tr * Math.pow(calculatedData.De, 2)) / calculatedData.cr) * calculatedData.timeMultiplier);
+          
+          const currentDomain = xAxisType === 'Tr'
+            ? [0.005, 5.0]
+            : [
+                ((0.005 * Math.pow(calculatedData.De, 2)) / calculatedData.cr) * calculatedData.timeMultiplier, 
+                ((5.0 * Math.pow(calculatedData.De, 2)) / calculatedData.cr) * calculatedData.timeMultiplier
+              ];
+
+          const timeUnitLabel = timeUnit === 'days' ? 'Ημέρες' : timeUnit === 'months' ? 'Μήνες' : 'Έτη';
+
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-2 md:p-6">
+              <div className="max-w-7xl mx-auto space-y-4">
+                
+                {/* Επικεφαλίδα (Σταθερή) */}
+                <header className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-5">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 shrink-0">
+                      <img 
+                        src="https://www.upatras.gr/wp-content/uploads/upatras-2.jpg" 
+                        alt="Λογότυπο Πανεπιστημίου Πατρών" 
+                        className="h-10 md:h-12 object-contain"
+                        onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
+                      />
+                      <div className="text-center sm:text-left sm:border-l-2 border-slate-200 sm:pl-4">
+                        <h2 className="text-sm md:text-base font-bold text-slate-800 uppercase tracking-wider">
+                          ΤΜΗΜΑ ΠΟΛΙΤΙΚΩΝ ΜΗΧΑΝΙΚΩΝ
+                        </h2>
+                        <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">
+                          Π. Πελέκης, Αναπλ. Καθηγητής
+                        </p>
+                      </div>
+                    </div>
+                    <div className="w-full h-px bg-gray-100 md:hidden"></div>
+                    <div className="flex-1 text-center md:text-right">
+                      <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-800 leading-snug">
+                        <span className="text-slate-500 font-bold mr-1">Radial 1.0:</span>
+                        <span className="text-red-600">Ακτινική Στερεοποίηση:</span> <br className="hidden md:block lg:hidden" /> Υπολογισμός Κατακορύφων Στραγγιστηρίων
+                      </h1>
+                    </div>
+                  </div>
+                </header>
+
+                <main className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    
+                    <div className="lg:col-span-8 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                       <div className="flex justify-between items-center mb-3 border-b pb-2">
+                          <h4 className="text-base md:text-lg font-bold text-slate-700">Καμπύλη Στερεοποίησης</h4>
+                          <div className="flex items-center space-x-3">
+                            {xAxisType === 't' && (
+                              <select 
+                                className="py-1 px-2 text-xs md:text-sm font-medium border border-gray-300 rounded-md focus:ring-1 focus:ring-red-500 outline-none text-slate-600 bg-white cursor-pointer"
+                                value={timeUnit}
+                                onChange={(e) => setTimeUnit(e.target.value)}
+                              >
+                                <option value="days">Ημέρες</option>
+                                <option value="months">Μήνες</option>
+                                <option value="years">Έτη</option>
+                              </select>
+                            )}
+                            <div className="flex bg-slate-100 p-0.5 rounded-lg">
+                              <button
+                                className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors ${xAxisType === 't' ? 'bg-white shadow-sm text-red-600 border border-gray-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                onClick={() => setXAxisType('t')}
+                              >
+                                Ur vs. log(t)
+                              </button>
+                              <button
+                                className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors ${xAxisType === 'Tr' ? 'bg-white shadow-sm text-red-600 border border-gray-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                onClick={() => setXAxisType('Tr')}
+                              >
+                                Ur vs. log(Tr)
+                              </button>
+                            </div>
+                          </div>
+                       </div>
+                       
+                       <div className="w-full h-[380px] mt-4 relative">
+                         <ResponsiveContainer width="100%" height="100%">
+                           <LineChart data={calculatedData.chartData} margin={{ top: 5, right: 30, left: 15, bottom: 25 }}>
+                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                             <XAxis 
+                               dataKey={xAxisType} 
+                               type="number"
+                               scale="log"
+                               domain={currentDomain}
+                               ticks={currentTicks}
+                               tickFormatter={(val) => {
+                                 if (xAxisType === 'Tr') return Number(val.toFixed(3)).toString();
+                                 return Number(val.toPrecision(3)).toString();
+                               }}
+                               tick={{ fill: '#475569', fontSize: 12 }}
+                               label={{ 
+                                 value: xAxisType === 't' ? `log(t) (${timeUnitLabel})` : 'log(Tr)', 
+                                 position: 'bottom', 
+                                 offset: 0,
+                                 fill: '#1e293b',
+                                 fontWeight: 600
+                               }} 
+                             />
+                             <YAxis 
+                               tick={{ fill: '#475569' }}
+                               label={{ 
+                                 value: 'Βαθμός Ακτινικής Στερεοποίησης Ur (%)', 
+                                 angle: -90, 
+                                 position: 'insideLeft',
+                                 style: { textAnchor: 'middle' },
+                                 offset: -5,
+                                 fill: '#1e293b',
+                                 fontWeight: 600
+                               }} 
+                               domain={[0, 100]} 
+                             />
+                             <Tooltip 
+                               position={{ x: 80, y: 50 }}
+                               formatter={(value, name) => {
+                                 if (name === 'Ur_Design') return [`${value}%`, 'Σχεδιασμός'];
+                                 return [`${value}%`, `n = ${name.split('_')[1]}`];
+                               }} 
+                               labelFormatter={(label) => `${xAxisType === 't' ? `t (${timeUnitLabel})` : 'Tr'} : ${label}`}
+                               contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                             />
+                             <Legend 
+                               verticalAlign="top" 
+                               height={36}
+                               formatter={(value) => {
+                                 if (value === 'Ur_Design') return <span className="font-bold text-red-600">Σχεδιασμός (n={(calculatedData.n).toFixed(1)})</span>;
+                                 return <span className="text-slate-600">n={value.split('_')[1]}</span>;
+                               }}
+                             />
+                             
+                             <Line type="monotone" dataKey="Ur_5" stroke="#cbd5e1" strokeWidth={1.5} dot={false} />
+                             <Line type="monotone" dataKey="Ur_10" stroke="#94a3b8" strokeWidth={1.5} dot={false} />
+                             <Line type="monotone" dataKey="Ur_20" stroke="#64748b" strokeWidth={1.5} dot={false} />
+                             <Line type="monotone" dataKey="Ur_40" stroke="#475569" strokeWidth={1.5} dot={false} />
+                             <Line type="monotone" dataKey="Ur_80" stroke="#1e293b" strokeWidth={1.5} dot={false} />
+                             
+                             <Line type="monotone" dataKey="Ur_Design" stroke="#dc2626" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#dc2626', stroke: '#fff', strokeWidth: 2 }} />
+                           </LineChart>
+                         </ResponsiveContainer>
+                       </div>
+                    </div>
+
+                    <div className="lg:col-span-4 bg-white p-4 rounded-xl shadow-sm border-t-4 border-t-blue-600 border-x border-b border-gray-200 flex flex-col h-full">
+                      <h4 className="text-base font-bold text-slate-800 mb-3">Παράμετροι Σχεδιασμού</h4>
+                      
+                      <div className="space-y-4 flex-grow">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">Μέθοδος Επίλυσης</label>
+                          <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button className="flex-1 py-1.5 text-xs font-bold rounded-md transition-colors bg-white shadow-sm text-blue-700 border border-gray-200">
+                              Barron (Αναλυτική)
+                            </button>
+                            <button className="flex-1 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700" onClick={() => onSwitchApp('numerical')}>
+                              FDM (Πεπ. Διαφορές)
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">Διάταξη Στραγγιστηρίων</label>
+                          <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${layoutType === 'square' ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-slate-500'}`} onClick={() => setLayoutType('square')}>
+                              Τετραγωνική
+                            </button>
+                            <button className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${layoutType === 'triangular' ? 'bg-white shadow-sm text-blue-700 border border-gray-200' : 'text-slate-500'}`} onClick={() => setLayoutType('triangular')}>
+                              Τριγωνική
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Απόσταση <span className="font-serif italic">s</span> (m)</label>
+                            <input type="number" step="0.1" min="0.5" value={spacing} onChange={(e) => setSpacing(parseFloat(e.target.value) || 0)} className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Διάμετρος <span className="font-serif italic">d<sub className="text-[9px]">w</sub></span> (m)</label>
+                            <input type="number" step="0.01" min="0.01" value={dw} onChange={(e) => setDw(parseFloat(e.target.value) || 0)} className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-gray-200">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Κατακ. <span className="font-serif italic">c<sub className="text-[9px]">v</sub></span> (m²/έτος)</label>
+                            <input type="number" step="0.1" min="0.1" value={cv} onChange={(e) => setCv(parseFloat(e.target.value) || 0)} className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Λόγος <span className="font-serif italic">c<sub className="text-[9px]">r</sub> / c<sub className="text-[9px]">v</sub></span></label>
+                            <input type="number" step="0.1" min="0.1" value={crCvRatio} onChange={(e) => setCrCvRatio(parseFloat(e.target.value) || 0)} className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 bg-slate-800 p-3 rounded-lg shadow-sm text-white">
+                        <h4 className="text-sm font-bold text-slate-100 mb-2 border-b border-slate-600 pb-1">Ενδιάμεσοι Υπολογισμοί</h4>
+                        <ul className="space-y-1.5 font-mono text-[13px]">
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Ισοδ. Ακτίνα (R):</span>
+                            <span className="font-bold text-[#00ff00]">{calculatedData.R.toFixed(3)} m</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Διάμετρος Επιρροής (Dₑ):</span>
+                            <span className="font-bold text-[#00ff00]">{calculatedData.De.toFixed(3)} m</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Λόγος Αποστάσεων (n):</span>
+                            <span className="font-bold text-[#00ff00]">{calculatedData.n.toFixed(1)}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Παράμετρος F(n):</span>
+                            <span className="font-bold text-[#00ff00]">{calculatedData.fn.toFixed(3)}</span>
+                          </li>
+                          <li className="flex justify-between items-center pt-1.5 border-t border-slate-600">
+                            <span className="text-slate-400">Ακτινικό cᵣ:</span>
+                            <span className="font-bold text-[#00ff00]">{(calculatedData.cr).toFixed(2)} m²/έτος</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                    
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    <div className="lg:col-span-8 bg-white py-1 px-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-center">
+                      <CrossSectionDiagram />
+                    </div>
+                    <div className="lg:col-span-4 h-full">
+                      <LayoutPlanDiagram layoutType={layoutType} />
+                    </div>
+                  </div>
+
+                </main>
+              </div>
+            </div>
+          );
+        }
+
+        // =========================================================================
+        // ΝΕΑ ΑΥΤΟΝΟΜΗ ΕΦΑΡΜΟΓΗ - FDM (ΕΝΣΩΜΑΤΩΜΕΝΗ)
+        // =========================================================================
+        function NumericalApp({ onSwitchApp }) {
+          const [dw, setDw] = useState(0.10);     
+          const [spacing, setSpacing] = useState(1.0);
+          const [pattern, setPattern] = useState('triangular'); 
+          const [cr, setCr] = useState(0.05);      
+          const [u0, setU0] = useState(100);       
+          const [tmax, setTmax] = useState(150);   
+          const [frameIndex, setFrameIndex] = useState(0);
+          const [Fr, setFr] = useState(0.25); 
+          const [nodesN, setNodesN] = useState(100); 
+
+          const rw = dw / 2;
+          const re = pattern === 'triangular' ? 0.525 * spacing : 0.564 * spacing;
+          const de = 2 * re;
+          const n_ratio = (de / dw).toFixed(1);
+
+          const simulationData = useMemo(() => {
+            let N = nodesN; 
+            if (N % 2 !== 0) N += 1; 
+            let dr = (re - rw) / N;
+            
+            if (cr <= 0 || dr <= 0 || re <= rw) return { frames: [], r: [], N, dr, dt: 0, Fr };
+            
+            let dt = (Fr * (dr * dr)) / cr;
+            let numSteps = Math.ceil(tmax / dt);
+            
+            while (numSteps > 600000 && N > 20) {
+              N -= 10;
+              if (N % 2 !== 0) N -= 1; 
+              dr = (re - rw) / N;
+              dt = (Fr * (dr * dr)) / cr;
+              numSteps = Math.ceil(tmax / dt);
+            }
+
+            if (numSteps > 1500000) {
+              return { frames: [], r: Array.from({ length: N + 1 }, (_, i) => rw + i * dr), N, dr };
+            }
+
+            const r = Array.from({ length: N + 1 }, (_, i) => rw + i * dr);
+            let u = Array(N + 1).fill(u0);
+            u[0] = 0; 
+            
+            const frames = [];
+            const numFramesToSave = 150; 
+            const frameStep = Math.max(1, Math.floor(numSteps / numFramesToSave));
+
+            for (let step = 0; step <= numSteps; step++) {
+              const currentTime = step * dt;
+              
+              let integral = 0;
+              if (N % 2 === 0) {
+                  for (let i = 0; i <= N; i++) {
+                      let weight = (i === 0 || i === N) ? 1 : (i % 2 !== 0 ? 4 : 2);
+                      integral += weight * u[i] * r[i];
+                  }
+                  integral = (integral * dr) / 3;
+              } else {
+                  for (let i = 0; i < N; i++) {
+                      integral += 0.5 * (u[i] * r[i] + u[i+1] * r[i+1]) * dr;
+                  }
+              }
+              
+              const area = (re * re - rw * rw) / 2;
+              const uAvg = integral / area;
+              
+              let Ur = (1 - uAvg / u0) * 100;
+              if (step === 0) Ur = 0; 
+              if (Ur > 100) Ur = 100;
+
+              if (step % frameStep === 0 || step === numSteps) {
+                frames.push({
+                  time: currentTime > tmax ? tmax : currentTime,
+                  u: [...u],
+                  Ur: parseFloat(Ur.toFixed(2))
+                });
+              }
+              if (step === numSteps) break;
+
+              let u_next = [...u];
+              for (let i = 1; i < N; i++) {
+                const term1 = (1 - dr / (2 * r[i])) * u[i - 1];
+                const term2 = -2 * u[i];
+                const term3 = (1 + dr / (2 * r[i])) * u[i + 1];
+                u_next[i] = u[i] + Fr * (term1 + term2 + term3);
+              }
+              u_next[N] = u[N] + 2 * Fr * (u[N - 1] - u[N]);
+              u_next[0] = 0; 
+              u = u_next;
+            }
+            return { frames, r, N, dr, dt, Fr };
+          }, [dw, spacing, pattern, cr, u0, tmax, rw, re, Fr, nodesN]);
+
+          useEffect(() => { setFrameIndex(0); }, [dw, spacing, pattern, cr, u0, tmax, Fr, nodesN]);
+
+          const currentFrame = simulationData.frames[frameIndex] || { u: [], time: 0, Ur: 0 };
+          const currentTr = (cr * currentFrame.time) / (de * de); 
+          
+          const n_val = de / dw;
+          const nSq = Math.pow(n_val, 2);
+          const fn = (nSq / (nSq - 1)) * Math.log(n_val) - (3 * nSq - 1) / (4 * nSq);
+          const safeUr = Math.min(currentFrame.Ur, 99.99) / 100;
+          const barronTr = currentFrame.Ur === 0 ? 0 : (-fn / 8) * Math.log(1 - safeUr);
+
+          const errorTr = barronTr === 0 ? 0 : Math.abs((currentTr - barronTr) / barronTr) * 100;
+
+          const xTicks = getNiceTicks(tmax);
+
+          const renderPlanView = () => {
+            if (!currentFrame.u || currentFrame.u.length === 0) return null;
+            const viewBoxSize = 400; 
+            const center = 200;
+            const maxDrawRadius = 180; 
+            const N = simulationData.N;
+            const r = simulationData.r;
+
+            const rings = [];
+            for (let i = N; i >= 0; i--) {
+              const pxRadius = (r[i] / re) * maxDrawRadius;
+              rings.push(<circle key={`ring-${i}`} cx={center} cy={center} r={pxRadius} fill={getHeatmapColor(currentFrame.u[i], u0)} />);
+            }
+
+            const vectors = [];
+            const vectorIndices = [Math.floor(N * 0.25), Math.floor(N * 0.55), Math.floor(N * 0.85)];
+            const angles = [0, 45, 90, 135, 180, 225, 270, 315]; 
+
+            vectorIndices.forEach(idx => {
+              const grad = (currentFrame.u[idx + 1] - currentFrame.u[idx - 1]) / (2 * simulationData.dr);
+              const maxExpectedGrad = u0 / (simulationData.dr * 2);
+              
+              if (grad > u0 * 0.01) { 
+                let arrowLen = (grad / maxExpectedGrad) * 100;
+                arrowLen = Math.max(16, Math.min(60, arrowLen)); 
+                const pxRadius = (r[idx] / re) * maxDrawRadius;
+                
+                angles.forEach(deg => {
+                  const pathString = `M ${pxRadius} 0 L ${pxRadius - arrowLen} 0 M ${pxRadius - arrowLen + 8} -5 L ${pxRadius - arrowLen} 0 L ${pxRadius - arrowLen + 8} 5`;
+                  vectors.push(
+                    <g key={`vec-${idx}-${deg}`} transform={`translate(${center}, ${center}) rotate(${deg})`}>
+                      <path d={pathString} stroke="rgba(255,255,255,0.8)" strokeWidth="4.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={pathString} stroke="#0f172a" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </g>
+                  );
+                });
+              }
+            });
+
+            const rwPx = (rw / re) * maxDrawRadius;
+
+            const nodes = [];
+            for (let i = 0; i <= N; i++) {
+              const pxRadius = (r[i] / re) * maxDrawRadius;
+              nodes.push(
+                <circle 
+                  key={`node-${i}`} 
+                  cx={center + pxRadius} 
+                  cy={center} 
+                  r="2.5" 
+                  fill="#ef4444" 
+                  stroke="#ffffff" 
+                  strokeWidth="0.5" 
+                />
+              );
+            }
+
+            return (
+              <svg viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`} className="w-full h-full drop-shadow-md">
+                <defs>
+                  <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#475569" />
+                  </marker>
+                </defs>
+                {rings}
+                {vectors}
+                
+                <circle cx={center} cy={center} r={rwPx} fill="#475569" stroke="#1e293b" strokeWidth="2" />
+                
+                <line x1={center} y1={center} x2={center + maxDrawRadius} y2={center} stroke="rgba(255,255,255,0.4)" strokeWidth="1" strokeDasharray="4 2" />
+                {nodes}
+
+                <text x="5" y="22" fontSize="13" fill="#475569" fontWeight="bold">Διάμετρος επιρροής</text>
+                <path d="M 50 28 Q 65 35 72 65" stroke="#475569" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead)" />
+              </svg>
+            );
+          };
+
+          const renderVerticalView = () => {
+            if (!currentFrame.u || currentFrame.u.length === 0) return null;
+            const svgW = 240;
+            const svgH = 340;
+            const N = simulationData.N;
+            const r = simulationData.r;
+            
+            const scaleX = svgW / (2 * re);
+            const centerX = svgW / 2;
+            const rwPx = rw * scaleX;
+            
+            const strips = [];
+            for(let i = 0; i < N; i++) {
+              const r1 = r[i];
+              const r2 = r[i+1];
+              const w = (r2 - r1) * scaleX;
+              const avgU = (currentFrame.u[i] + currentFrame.u[i+1]) / 2;
+              const color = getHeatmapColor(avgU, u0);
+              
+              strips.push(<rect key={`R-${i}`} x={centerX + r1 * scaleX} y={0} width={w + 0.5} height={svgH} fill={color} />);
+              strips.push(<rect key={`L-${i}`} x={centerX - r2 * scaleX} y={0} width={w + 0.5} height={svgH} fill={color} />);
+            }
+
+            const vectors = [];
+            const vectorIndices = [Math.floor(N * 0.25), Math.floor(N * 0.55), Math.floor(N * 0.85)];
+            const yPositions = [svgH * 0.25, svgH * 0.5, svgH * 0.75];
+
+            vectorIndices.forEach(idx => {
+              const grad = (currentFrame.u[idx + 1] - currentFrame.u[idx - 1]) / (2 * simulationData.dr);
+              const maxExpectedGrad = u0 / (simulationData.dr * 2);
+              
+              if (grad > u0 * 0.01) { 
+                let arrowLen = (grad / maxExpectedGrad) * 35;
+                arrowLen = Math.max(12, Math.min(25, arrowLen)); 
+                const pxRadius = r[idx] * scaleX;
+                
+                yPositions.forEach(y => {
+                  const xR = centerX + pxRadius;
+                  const pathR = `M ${xR} ${y} L ${xR - arrowLen} ${y} M ${xR - arrowLen + 6} ${y - 4} L ${xR - arrowLen} ${y} L ${xR - arrowLen + 6} ${y + 4}`;
+                  const xL = centerX - pxRadius;
+                  const pathL = `M ${xL} ${y} L ${xL + arrowLen} ${y} M ${xL + arrowLen - 6} ${y - 4} L ${xL + arrowLen} ${y} L ${xL + arrowLen - 6} ${y + 4}`;
+                  
+                  vectors.push(
+                    <g key={`vec-R-${idx}-${y}`}>
+                      <path d={pathR} stroke="rgba(255,255,255,0.8)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={pathR} stroke="#0f172a" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </g>,
+                    <g key={`vec-L-${idx}-${y}`}>
+                      <path d={pathL} stroke="rgba(255,255,255,0.8)" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={pathL} stroke="#0f172a" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </g>
+                  );
+                });
+              }
+            });
+            
+            return (
+              <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-full drop-shadow-md border-b-8 border-slate-700 bg-white">
+                {strips}
+                <rect x={centerX - rwPx} y={0} width={2 * rwPx} height={svgH} fill="#475569" stroke="#1e293b" strokeWidth="1" />
+                <line x1={centerX} y1={0} x2={centerX} y2={svgH} stroke="#94a3b8" strokeDasharray="5 5" strokeWidth="1.5" />
+                {vectors}
+                <line x1={0} y1={0} x2={0} y2={svgH} stroke="#0f172a" strokeDasharray="8 4" strokeWidth="1.5" opacity="0.6" />
+                <line x1={svgW} y1={0} x2={svgW} y2={svgH} stroke="#0f172a" strokeDasharray="8 4" strokeWidth="1.5" opacity="0.6" />
+                <text x={centerX} y={15} fontSize="10" fill="#f8fafc" textAnchor="middle" fontWeight="bold">ΣΤΡΑΓΓ.</text>
+                <text x={12} y={15} fontSize="10" fill="#0f172a" textAnchor="start" fontWeight="bold">r_e</text>
+                <text x={svgW - 12} y={15} fontSize="10" fill="#0f172a" textAnchor="end" fontWeight="bold">r_e</text>
+              </svg>
+            );
+          };
+
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-2 md:p-6">
+              <div className="max-w-7xl mx-auto space-y-4">
+                
+                {/* Επικεφαλίδα (Σταθερή - Ολόιδια με την Αναλυτική) */}
+                <header className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-5">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 shrink-0">
+                      <img 
+                        src="https://www.upatras.gr/wp-content/uploads/upatras-2.jpg" 
+                        alt="Λογότυπο Πανεπιστημίου Πατρών" 
+                        className="h-10 md:h-12 object-contain"
+                        onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
+                      />
+                      <div className="text-center sm:text-left sm:border-l-2 border-slate-200 sm:pl-4">
+                        <h2 className="text-sm md:text-base font-bold text-slate-800 uppercase tracking-wider">
+                          ΤΜΗΜΑ ΠΟΛΙΤΙΚΩΝ ΜΗΧΑΝΙΚΩΝ
+                        </h2>
+                        <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">
+                          Π. Πελέκης, Αναπλ. Καθηγητής
+                        </p>
+                      </div>
+                    </div>
+                    <div className="w-full h-px bg-gray-100 md:hidden"></div>
+                    <div className="flex-1 text-center md:text-right">
+                      <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-800 leading-snug">
+                        <span className="text-slate-500 font-bold mr-1">Radial 1.0:</span>
+                        <span className="text-red-600">Ακτινική Στερεοποίηση:</span> <br className="hidden md:block lg:hidden" /> Υπολογισμός Κατακορύφων Στραγγιστηρίων
+                      </h1>
+                    </div>
+                  </div>
+                </header>
+
+                <main className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    
+                    {/* Controls Panel */}
+                    <div className="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border-t-4 border-t-red-600 border-x border-b border-gray-200 space-y-5 flex flex-col h-full">
+                      
+                      <div className="space-y-4 flex-grow">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">Μέθοδος Επίλυσης</label>
+                          <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button className="flex-1 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700" onClick={() => onSwitchApp('analytical')}>
+                              Barron (Αναλυτική)
+                            </button>
+                            <button className="flex-1 py-1.5 text-xs font-bold rounded-md transition-colors bg-white shadow-sm text-red-600 border border-gray-200">
+                              FDM (Πεπ. Διαφορές)
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pb-2 border-b border-slate-100 pt-2">
+                          <Settings className="w-5 h-5 text-slate-400" />
+                          <h2 className="text-base font-bold text-slate-700">Παράμετροι FDM</h2>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-600">Διάμετρος Στραγγ. d<sub>w</sub> (m)</label>
+                            <span className="text-xs font-bold text-red-600">{dw.toFixed(2)}</span>
+                          </div>
+                          <input type="range" min="0.01" max="1.00" step="0.01" value={dw} 
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setDw(val);
+                              const coeff = pattern === 'triangular' ? 0.525 : 0.564;
+                              const newRw = val / 2;
+                              if (coeff * spacing - newRw < 0.2) {
+                                setSpacing(parseFloat(((newRw + 0.2) / coeff).toFixed(2)));
+                              }
+                            }} 
+                            className="w-full accent-red-600" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-600">Απόσταση / Κάνναβος S (m)</label>
+                            <span className="text-xs font-bold text-red-600">{spacing.toFixed(2)}</span>
+                          </div>
+                          <input type="range" min="0.5" max="6.0" step="0.05" value={spacing} 
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              const coeff = pattern === 'triangular' ? 0.525 : 0.564;
+                              const newRe = coeff * val;
+                              if (newRe - rw < 0.2) {
+                                const newDw = (newRe - 0.2) * 2;
+                                if (newDw >= 0.01) {
+                                  setDw(parseFloat(newDw.toFixed(2)));
+                                  setSpacing(val);
+                                }
+                              } else {
+                                setSpacing(val);
+                              }
+                            }} 
+                            className="w-full accent-red-600" />
+                          <div className="text-[11px] text-slate-500 mt-1 flex justify-between bg-slate-50 p-1.5 rounded border border-slate-100">
+                            <span>Ισοδύναμη Διάμετρος (d<sub>e</sub>):</span>
+                            <span className="font-bold text-slate-700">{de.toFixed(3)} m</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-slate-600">Διάταξη Καννάβου</label>
+                          <div className="flex gap-2 mt-1">
+                            <button 
+                              onClick={() => setPattern('triangular')}
+                              className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${pattern === 'triangular' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            >
+                              Τριγωνικός
+                            </button>
+                            <button 
+                              onClick={() => setPattern('square')}
+                              className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${pattern === 'square' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            >
+                              Τετραγωνικός
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-600">Συντελεστής c<sub>r</sub> (m²/day)</label>
+                            <span className="text-xs font-bold text-red-600">{cr.toFixed(3)}</span>
+                          </div>
+                          <input type="range" min="0.001" max="0.200" step="0.001" value={cr} 
+                            onChange={(e) => setCr(parseFloat(e.target.value))} className="w-full accent-red-600" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-600">Αρχική Πίεση u<sub>0</sub> (kPa)</label>
+                            <span className="text-xs font-bold text-red-600">{u0}</span>
+                          </div>
+                          <input type="range" min="10" max="300" step="10" value={u0} 
+                            onChange={(e) => setU0(parseFloat(e.target.value))} className="w-full accent-red-600" />
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800 p-4 rounded-lg shadow-sm text-white mt-4 space-y-4 border border-slate-700">
+                        <div className="flex items-center gap-2 mb-1 border-b border-slate-600 pb-2">
+                          <Settings className="w-4 h-4 text-slate-300" />
+                          <span className="text-sm font-bold text-slate-100">Παράμετροι Αριθμητικής Επίλυσης</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-300">Χρόνος t<sub>max</sub> (days)</label>
+                            <span className="text-xs font-bold text-[#00ff00]">{tmax}</span>
+                          </div>
+                          <input type="range" min="10" max="1000" step="10" value={tmax} 
+                            onChange={(e) => setTmax(parseFloat(e.target.value))} className="w-full accent-[#00ff00]" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-300">Αριθμός Κόμβων (N)</label>
+                            <span className="text-xs font-bold text-[#00ff00]">{nodesN}</span>
+                          </div>
+                          <input type="range" min="20" max="200" step="10" value={nodesN} 
+                            onChange={(e) => setNodesN(parseInt(e.target.value))} className="w-full accent-[#00ff00]" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <label className="text-xs font-medium text-slate-300">Αριθμός Fourier (Fr)</label>
+                            <span className="text-xs font-bold text-[#00ff00]">{Fr.toFixed(2)}</span>
+                          </div>
+                          <input type="range" min="0.05" max="0.50" step="0.01" value={Fr} 
+                            onChange={(e) => setFr(parseFloat(e.target.value))} className="w-full accent-[#00ff00]" />
+                        </div>
+
+                        <ul className="space-y-1.5 text-[12px] font-mono bg-slate-900 p-2.5 rounded border border-slate-700 mt-2">
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Ενεργοί Κόμβοι (N):</span>
+                            <span className="font-bold text-white">{simulationData.N}</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Χωρικό βήμα dr:</span>
+                            <span className="font-bold text-white">{simulationData.dr?.toFixed(4)} m</span>
+                          </li>
+                          <li className="flex justify-between items-center">
+                            <span className="text-slate-400">Χρονικό βήμα dt:</span>
+                            <span className="font-bold text-white">{simulationData.dt?.toFixed(4)} days</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Visualizations Panel */}
+                    <div className="lg:col-span-3 flex flex-col gap-4">
+                      
+                      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative">
+                        
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                          
+                          {/* 1. Stacked Stats */}
+                          <div className="bg-white border border-red-100 p-3 rounded-lg flex flex-col gap-1.5 w-full md:w-64 shadow-sm relative">
+                            <div className="flex items-center gap-2 text-red-800 font-bold mb-1 border-b border-red-50 pb-1">
+                              <Clock className="w-4 h-4" /> <span>t = {currentFrame.time?.toFixed(1)} ημέρες</span>
+                            </div>
+                            <div className="text-red-700 font-semibold text-sm pl-6 flex justify-between">
+                              <span>U<sub>r</sub> :</span> <span>{currentFrame.Ur?.toFixed(1)} %</span>
+                            </div>
+                            <div className="text-red-700 font-semibold text-sm pl-6 flex justify-between">
+                              <span>T<sub>r</sub> (FDM):</span> <span>{currentTr?.toFixed(3)}</span>
+                            </div>
+                            <div className="text-slate-600 font-semibold text-[13px] pl-6 flex justify-between items-center">
+                              <span>T<sub>r</sub> (Barron):</span> 
+                              <div className="flex items-center gap-2">
+                                <span>{barronTr?.toFixed(3)}</span>
+                                {currentFrame.Ur > 0 && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${errorTr < 2 ? 'bg-green-100 text-green-700' : errorTr < 5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                    ±{errorTr.toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-red-700 font-semibold text-sm pl-6 flex justify-between border-t border-red-50 pt-1 mt-0.5">
+                              <span>n :</span> <span>{n_ratio}</span>
+                            </div>
+                            
+                            <div className="mt-1 text-[9.5px] text-slate-500 italic leading-tight bg-slate-50 p-1.5 rounded border border-slate-100">
+                               * Η FDM λύνει πεδίο "Ελεύθερης Παραμόρφωσης" (Free Strain) ενώ ο Barron υποθέτει "Ίση Παραμόρφωση" (Equal Strain). Η απόκλιση είναι αναμενόμενη σε Ur &lt; 40-50%.
+                            </div>
+                          </div>
+
+                          {/* 2. Narrow Slider */}
+                          <div className="flex-1 max-w-[220px] flex flex-col items-center">
+                            <span className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider bg-slate-200 px-3 py-1 rounded-full">Χρονογραμμη</span>
+                            <input 
+                              type="range" min="0" max={Math.max(0, simulationData.frames.length - 1)} step="1" 
+                              value={frameIndex} onChange={(e) => setFrameIndex(parseInt(e.target.value))} 
+                              className="w-full accent-red-600 cursor-pointer"
+                            />
+                          </div>
+
+                          {/* 3. Larger Legend */}
+                          <div className="w-full md:w-72 bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                            <span className="text-xs font-bold text-slate-600 block mb-3 text-center uppercase">Υπερβαλλουσα Πιεση (u)</span>
+                            <div className="flex justify-between text-xs font-bold text-slate-800 mb-1.5 px-1">
+                              <span>0</span>
+                              <span>{u0} kPa</span>
+                            </div>
+                            <div className="h-4 w-full rounded-full shadow-inner" style={{ background: 'linear-gradient(to right, rgb(0,0,200), rgb(100,220,255))' }} />
+                          </div>
+                        </div>
+
+                        {/* 2D Views Container */}
+                        <div className="flex flex-col md:flex-row items-center justify-center gap-12 mt-4">
+                          <div className="flex flex-col items-center relative">
+                            <span className="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wider">Κάτοψη</span>
+                            <div className="w-56 h-56 md:w-72 md:h-72 flex-shrink-0 relative">
+                              {renderPlanView()}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-center">
+                            <span className="text-sm font-semibold text-slate-500 mb-3 uppercase tracking-wider">Τομή 2 Στραγγιστηρίων</span>
+                            <div className="w-48 h-56 md:w-60 md:h-72 flex-shrink-0">
+                              {renderVerticalView()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom row: Chart */}
+                      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex-1 min-h-[300px] flex flex-col">
+                        <div className="flex-1 w-full pt-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={simulationData.frames} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                              <XAxis 
+                                dataKey="time" 
+                                type="number"
+                                domain={[0, tmax]}
+                                ticks={xTicks}
+                                label={{ value: 'Χρόνος t (ημέρες)', position: 'bottom', offset: 0 }} 
+                                stroke="#64748b"
+                                tickFormatter={(val) => val.toString()}
+                              />
+                              <YAxis 
+                                domain={[0, 100]} 
+                                label={{ value: 'Βαθμός Στερεοποίησης Ur (%)', angle: -90, position: 'insideLeft', offset: 15, style: { textAnchor: 'middle' } }} 
+                                stroke="#64748b"
+                              />
+                              <Tooltip 
+                                formatter={(value) => [`${value}%`, 'Ur']}
+                                labelFormatter={(label) => `t = ${Number(label).toFixed(1)} ημέρες`}
+                                contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                              />
+                              
+                              <Line type="monotone" dataKey="Ur" stroke="#dc2626" strokeWidth={3} dot={false} isAnimationActive={false} />
+                              
+                              <ReferenceDot x={currentFrame.time} y={currentFrame.Ur} r={6} fill="#dc2626" stroke="white" strokeWidth={2} isFront={true} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </main>
+              </div>
+            </div>
+          );
+        }
+
+        // =========================================================================
+        // ΚΕΝΤΡΙΚΟΣ ΔΡΟΜΟΛΟΓΗΤΗΣ (ROUTER)
+        // =========================================================================
+        function App() {
+          const [currentApp, setCurrentApp] = useState('analytical');
+
+          if (currentApp === 'numerical') {
+            return <NumericalApp onSwitchApp={setCurrentApp} />;
+          }
+
+          return <AnalyticalApp onSwitchApp={setCurrentApp} />;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
